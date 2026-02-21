@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "has_funding_info": {
+      "type": "boolean",
+      "description": "文章是否包含具体的融资事件信息"
+    },
+    "funding_rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "company_name_cn": { "type": "string" },
+          "company_name_en": { "type": ["string", "null"] },
+          "company_sector": {
+            "type": "string",
+            "enum": ["LLM", "机器人", "自动驾驶", "AI医疗", "AI芯片", "AI安全", "AI基础设施", "AI应用", "具身智能", "计算机视觉", "NLP", "AI for Science", "其他"]
+          },
+          "stage": {
+            "type": "string",
+            "enum": ["Angel", "Pre-Seed", "Seed", "Pre-A", "A", "A+", "B", "B+", "C", "C+", "D", "E+", "Pre-IPO", "IPO", "Strategic", "Acquisition", "Undisclosed"]
+          },
+          "date": {
+            "type": ["string", "null"],
+            "description": "YYYY-MM-DD 格式，从文中推断"
+          },
+          "amount": {
+            "type": ["object", "null"],
+            "properties": {
+              "value": { "type": "number" },
+              "currency": { "type": "string", "enum": ["CNY", "USD", "EUR", "HKD"] },
+              "raw_text": { "type": "string", "description": "原文表述，如'数亿元人民币'" }
+            }
+          },
+          "valuation": {
+            "type": ["object", "null"],
+            "properties": {
+              "value": { "type": "number" },
+              "currency": { "type": "string" },
+              "raw_text": { "type": "string" }
+            }
+          },
+          "lead_investors": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "领投方名称列表"
+          },
+          "co_investors": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "跟投方名称列表"
+          },
+          "evidence": {
+            "type": "string",
+            "description": "支撑此融资事件的原文片段，直接引用，不要改写"
+          },
+          "confidence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "1=非常不确定, 3=有依据但有缺失, 5=明确完整"
+          },
+          "confidence_notes": {
+            "type": "string",
+            "description": "置信度低的原因，如'金额为推测'、'轮次未明确提及'"
+          }
+        },
+        "required": ["company_name_cn", "stage", "evidence", "confidence"]
+      }
+    }
+  },
+  "required": ["has_funding_info", "funding_rounds"]
+}

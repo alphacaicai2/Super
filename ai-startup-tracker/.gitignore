@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+.env.local
+*.log
+.DS_Store
+data/training_data/
+*.jsonl

@@ -672,6 +672,52 @@ ai-startup-tracker/
 
 ---
 
+### 多 Agent 并行开发指南
+
+**结论：可以多 Agent 并行**，前提是**先定好接口、按轨道分工、避免改同一文件**。
+
+#### 原则
+
+1. **接口先行**：Phase 0 的 `StorageBackend`、`SourceAdapter`、`config.py` 和 Pydantic 数据模型先定好，各轨道只依赖接口不依赖实现细节。
+2. **按轨道分文件**：每个 Agent 负责一组文件，尽量不交叉（减少 merge 冲突）。
+3. **串行关卡**：Phase 0 必须全部完成后，Phase 1 的轨道才能并行；`run_pipeline.py` 依赖所有 pipeline 模块，放在最后或由一人收尾。
+
+#### Phase 0 并行分工
+
+| 轨道 | Agent | 负责内容 | 依赖 |
+|------|--------|----------|------|
+| **A：基础** | Agent 1 | 目录结构、`requirements.txt`、`.env.example`、`config.py`、`.gitignore` | 无 |
+| **B：存储** | Agent 2 | `storage/base.py`、`storage/airtable_backend.py`、`storage/__init__.py` | 需 config（A 先提交） |
+| **C：适配器与资源** | Agent 3 | `adapters/base.py`、`adapters/__init__.py`、`prompts/system_prompt.txt`、`prompts/extraction_schema.json`、`data/org_aliases.json` | 无（与 A 可同时） |
+| **D：建表清单** | Agent 4 或人工 | `docs/airtable-setup-checklist.md`（建表字段与步骤） | 无 |
+
+**推荐顺序**：A 先做并 push → B、C、D 可同时进行（B/C 依赖 A 的 config 与目录）。
+
+#### Phase 1 并行分工
+
+| 轨道 | Agent | 负责文件 | 依赖 |
+|------|--------|----------|------|
+| **P1：采集+预处理** | Agent 1 | `adapters/rss_article.py`、`pipeline/fetch_miniflux.py`、`pipeline/preprocess.py`、`pipeline/__init__.py` | Phase 0 完成；StorageBackend、SourceAdapter 接口 |
+| **P2：抽取+模型** | Agent 2 | `models/schemas.py`、`models/__init__.py`、`pipeline/extract.py` | Phase 0 完成；prompts、config |
+| **P3：归一化+写入** | Agent 3 | `pipeline/normalize.py`、`pipeline/write_airtable.py` | Phase 0 完成；StorageBackend、config、data/org_aliases.json |
+| **P4：编排+测试** | Agent 4 或 1 | `run_pipeline.py`、`tests/test_preprocess.py`、`tests/test_extract.py`、`tests/sample_articles/` | P1、P2、P3 均完成 |
+
+**依赖关系**：P1、P2、P3 之间**无代码依赖**（只共享 `config`、`storage`、`models`），可并行开发。P4 必须在 P1～P3 合并后再做。
+
+#### 接口契约（各轨道需遵守）
+
+- **StorageBackend**（B 轨道实现，P1/P3 调用）：`create_source`、`get_pending_sources`、`update_source_status`、`find_company`、`find_org`、`create_company`、`create_org`、`create_funding_round`、`create_extraction_log`。见 `storage/base.py`。
+- **SourceAdapter**（C 轨道定义，P1 使用）：`preprocess(raw_content, metadata) -> ProcessedContent`、`default_reliability() -> str`。见 `adapters/base.py`。
+- **抽取输出**（P2 产出，P3 消费）：Pydantic 模型 `ExtractionResult`，含 `has_funding_info`、`funding_rounds: list[FundingRound]`。见 `models/schemas.py`。
+
+#### 风险与注意
+
+- **同一文件多人改**：避免。若必须（如 `config.py` 加新常量），约定由 A 轨道负责人统一改。
+- **合并顺序**：建议 A → B/C/D 合并 → P1/P2/P3 合并 → P4 合并；每次合并后跑一遍 `pip install -r requirements.txt` 和最小冒烟测试（如创建一条 Source）。
+- **Airtable 建表**：只能人工在 Airtable 里操作，可与 Phase 0 代码并行；建表清单文档由 D 轨道产出，便于多人/多 Agent 对齐。
+
+---
+
 ### Phase 1：单通道 MVP — RSS 采集 + 抽取（Day 1 下午 – Day 3）
 
 **目标**：从 Miniflux 拉文章 → LLM 抽取 → 写入 Airtable。**一条命令跑通全流程。**
