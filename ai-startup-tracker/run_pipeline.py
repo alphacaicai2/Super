@@ -61,7 +61,7 @@ def main() -> None:
         print(f"[WARN] Miniflux fetch failed: {e}")
 
     # 3) 取待处理来源
-    pending = storage.get_pending_sources(limit=50)
+    pending = storage.get_pending_sources(limit=200)
     if not pending:
         print("[OK] No pending sources. Done.")
         send_run_summary(stats, success=True)
