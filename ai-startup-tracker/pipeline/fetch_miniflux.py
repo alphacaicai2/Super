@@ -3,6 +3,7 @@ Fetch unread entries from Miniflux and create source records.
 Uses config.MINIFLUX_URL and config.MINIFLUX_API_KEY.
 """
 import hashlib
+from datetime import datetime
 import httpx
 
 import config
@@ -10,6 +11,22 @@ from storage.base import StorageBackend
 
 # Truncate raw_text to avoid huge records
 RAW_TEXT_MAX_LENGTH = 100_000
+
+
+def _published_at_to_iso(value) -> str | None:
+    """Normalize Miniflux published_at to ISO date string for Airtable (YYYY-MM-DD)."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) and value > 0:
+        try:
+            dt = datetime.utcfromtimestamp(int(value))
+            return dt.strftime("%Y-%m-%d")
+        except (ValueError, OSError):
+            return None
+    if isinstance(value, str) and value.strip():
+        # Already ISO-like (e.g. 2025-02-21 or 2025-02-21T12:00:00Z)
+        return value.strip()[:10]
+    return None
 
 
 def fetch_and_create_sources(storage: StorageBackend) -> int:
@@ -45,7 +62,7 @@ def fetch_and_create_sources(storage: StorageBackend) -> int:
             title = (entry.get("title") or "").strip()
             content = entry.get("content") or ""
             url = (entry.get("url") or "").strip()
-            published_at = entry.get("published_at") or ""
+            published_at = _published_at_to_iso(entry.get("published_at"))
             feed = entry.get("feed") or {}
             author = (feed.get("title") or "").strip()
 
@@ -57,13 +74,14 @@ def fetch_and_create_sources(storage: StorageBackend) -> int:
                 "title": title,
                 "url": url,
                 "author": author,
-                "published_at": published_at,
                 "source_channel": config.SOURCE_CHANNEL_MINIFLUX,
                 "content_hash": content_hash,
                 "has_funding_signal": False,
                 "processing_status": config.PROCESSING_STATUS_NEW,
                 "raw_text": raw_text,
             }
+            if published_at is not None:
+                data["published_at"] = published_at
             storage.create_source(data)
             created += 1
 
