@@ -14,6 +14,7 @@ import config  # noqa: E402
 def send_telegram(text: str) -> bool:
     """发送一条文本到配置的 Telegram 群/用户。未配置 token/chat_id 时不发送并返回 False。"""
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
+        print("[notify] Telegram skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set")
         return False
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
     try:
@@ -22,8 +23,12 @@ def send_telegram(text: str) -> bool:
             json={"chat_id": config.TELEGRAM_CHAT_ID, "text": text},
             timeout=10.0,
         )
-        return r.is_success
-    except Exception:
+        if not r.is_success:
+            print(f"[notify] Telegram send failed: HTTP {r.status_code} {r.text[:200]}")
+            return False
+        return True
+    except Exception as e:
+        print(f"[notify] Telegram send error: {e}")
         return False
 
 
@@ -39,6 +44,7 @@ def send_run_summary(
     若未配置 TELEGRAM_* 则不发送。
     """
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
+        print("[notify] Run summary skipped: Telegram not configured")
         return
     created = stats.get("sources_created", 0)
     processed = stats.get("sources_processed", 0)
