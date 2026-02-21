@@ -99,7 +99,7 @@ def main() -> None:
             storage.update_source_status(source_id, config.PROCESSING_STATUS_NEEDS_REVIEW)
             storage.create_extraction_log({
                 "source": [source_id],
-                "run_at": datetime.now().isoformat(),
+                "run_at": datetime.now().strftime("%Y-%m-%d"),
                 "model": config.LLM_MODEL,
                 "input_tokens": 0,
                 "output_tokens": 0,
@@ -113,7 +113,7 @@ def main() -> None:
             storage.update_source_status(source_id, config.PROCESSING_STATUS_EXTRACTED)
             storage.create_extraction_log({
                 "source": [source_id],
-                "run_at": datetime.now().isoformat(),
+                "run_at": datetime.now().strftime("%Y-%m-%d"),
                 "model": config.LLM_MODEL,
                 "input_tokens": token_usage.get("input_tokens", 0),
                 "output_tokens": token_usage.get("output_tokens", 0),
@@ -145,7 +145,7 @@ def main() -> None:
             storage.update_source_status(source_id, config.PROCESSING_STATUS_NEEDS_REVIEW)
             storage.create_extraction_log({
                 "source": [source_id],
-                "run_at": datetime.now().isoformat(),
+                "run_at": datetime.now().strftime("%Y-%m-%d"),
                 "model": config.LLM_MODEL,
                 "input_tokens": token_usage.get("input_tokens", 0),
                 "output_tokens": token_usage.get("output_tokens", 0),

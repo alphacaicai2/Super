@@ -81,7 +81,7 @@ def write_extraction_result(
 
     storage.create_extraction_log({
         "source": [source_id],
-        "run_at": now_iso,
+        "run_at": date_only,
         "model": config.LLM_MODEL,
         "input_tokens": token_usage.get("input_tokens", 0),
         "output_tokens": token_usage.get("output_tokens", 0),
