@@ -4,7 +4,24 @@
 
 ---
 
-## 一、待复核 Interface（推荐）
+## 〇、待复核视图（表格视图，约 30 秒）
+
+**在 FundingRounds 表里建一个「待复核」视图，只显示需要人工复核的记录。**
+
+1. 打开你的 Base：浏览器访问 `https://airtable.com/<你的 BASE_ID>`（BASE_ID 即 `.env` 里的 `AIRTABLE_BASE_ID`）。
+2. 左侧点击表 **FundingRounds**。
+3. 左上角当前视图名称旁点 **+** 或 **Add view**，新建视图。
+4. 视图名称填：**待复核**（或 🔍 待复核）。
+5. 在视图设置里点 **Filter**（筛选）→ **Add condition**：
+   - 字段选 **needs_review**
+   - 条件选 **Is checked**（已勾选）。
+6. 可选：再加一条筛选 **verification_status** → **is** → **unverified**。
+7. 可选：在 **Fields** 里勾选要显示的列（建议保留：round_label、company、stage、amount_value、amount_currency、evidence_text、source_primary、confidence、verification_status、review_notes）。
+8. 保存。之后有抽到融资且标为 needs_review 时，在这个视图里逐条改完并把 **verification_status** 改为 **verified**。
+
+---
+
+## 一、待复核 Interface（可选，需 Interface 设计器）
 
 1. 打开你的 Base（如 VibeX）→ 点击左上 **Extensions** 或 **Interface**（若已启用 Interface 设计器）。
 2. 新建 Interface：名称 `🔍 待复核`。
@@ -42,3 +59,9 @@ https://airtable.com/appXXXXXXXXXXXXXX/xxxxxxxxxxxxx
 ```
 
 其中 `appXXX` 为 Base ID，后面一段为 Interface 或表视图的 ID（可在浏览器地址栏复制）。若只做表视图，链接到 FundingRounds 表并带筛选参数即可。
+
+---
+
+## 四、ExtractionLog 为空
+
+**ExtractionLog** 只有在「某篇来源过了预处理、调用了 LLM 抽取」时才会写入一条记录（成功/无融资/失败）。若当前为空白，说明本 run 里处理的 50 篇都在**预处理阶段**因未命中融资关键词被标为 skipped，没有进入 LLM 抽取，因此没有写 ExtractionLog。等有文章命中关键词并走完抽取后，这里就会出现对应日志。

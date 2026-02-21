@@ -34,6 +34,7 @@ class AirtableBackend(StorageBackend):
         self._orgs = self._api.table(self._base_id, config.TABLE_ORGS)
         self._funding_rounds = self._api.table(self._base_id, config.TABLE_FUNDING_ROUNDS)
         self._extraction_log = self._api.table(self._base_id, config.TABLE_EXTRACTION_LOG)
+        self._pipeline_state = self._api.table(self._base_id, config.TABLE_PIPELINE_STATE)
 
     def _record_to_dict(self, record: dict) -> dict:
         """Normalize Airtable record to a plain dict with id and fields merged."""
@@ -84,3 +85,29 @@ class AirtableBackend(StorageBackend):
     def create_extraction_log(self, data: dict) -> str:
         rec = self._extraction_log.create(data)
         return rec["id"]
+
+    # --- Pipeline state (表 PipelineState 不存在时 get 返回 None，set 忽略) ---
+    _STATE_FIELD = "last_fetch_at"
+
+    def get_last_fetch_at(self) -> str | None:
+        try:
+            recs = self._pipeline_state.all(max_records=1)
+            if not recs:
+                return None
+            val = recs[0].get("fields", {}).get(self._STATE_FIELD)
+            if val is None:
+                return None
+            return str(val)[:10]  # YYYY-MM-DD
+        except Exception:
+            return None
+
+    def set_last_fetch_at(self, iso_date: str) -> None:
+        try:
+            recs = self._pipeline_state.all(max_records=1)
+            date_only = iso_date[:10]
+            if recs:
+                self._pipeline_state.update(recs[0]["id"], {self._STATE_FIELD: date_only})
+            else:
+                self._pipeline_state.create({self._STATE_FIELD: date_only})
+        except Exception:
+            pass

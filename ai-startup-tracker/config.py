@@ -22,6 +22,7 @@ TABLE_COMPANIES = "Companies"
 TABLE_ORGS = "Orgs"
 TABLE_FUNDING_ROUNDS = "FundingRounds"
 TABLE_EXTRACTION_LOG = "ExtractionLog"
+TABLE_PIPELINE_STATE = "PipelineState"
 
 # --- Sources 表字段 / 枚举 ---
 SOURCE_TYPE_RSS_ARTICLE = "rss_article"
@@ -70,9 +71,13 @@ FUNDING_KEYWORDS = [
     "获投", "完成融资", "宣布融资",
 ]
 
-# --- Miniflux ---
+# --- Miniflux（仅读取，不修改 Miniflux 内任何数据）---
 MINIFLUX_URL = _env("MINIFLUX_URL")
 MINIFLUX_API_KEY = _env("MINIFLUX_API_KEY")
+# 只拉取发表日期在此天数内的文章（0=不限制，避免大量 2015 等陈年未读被处理）
+PUBLISHED_AFTER_DAYS = int(_env("PUBLISHED_AFTER_DAYS", "0") or "0")
+# 首次 run（无 last_fetch_at）时只拉取最近 N 天的未读，避免拉一整批 2018 等陈年未读（0=不限制）
+FIRST_RUN_PUBLISHED_AFTER_DAYS = int(_env("FIRST_RUN_PUBLISHED_AFTER_DAYS", "365") or "365")
 
 # --- LLM（运行时用：从文章正文抽取融资事件，非开发时用）---
 # litellm 按 model 前缀选 API Key：anthropic/ → ANTHROPIC_API_KEY，openai/ → OPENAI_API_KEY 等

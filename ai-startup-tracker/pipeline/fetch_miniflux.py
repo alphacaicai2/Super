@@ -1,9 +1,11 @@
 """
 Fetch unread entries from Miniflux and create source records.
-Uses config.MINIFLUX_URL and config.MINIFLUX_API_KEY.
+
+重要：本模块仅对 Miniflux 做只读请求（GET），不标记已读、不修改或删除任何数据，
+以便同一 Miniflux 实例供其他程序使用。
 """
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import httpx
 
 import config
@@ -29,9 +31,36 @@ def _published_at_to_iso(value) -> str | None:
     return None
 
 
-def fetch_and_create_sources(storage: StorageBackend) -> int:
+def _is_after_cutoff(published_at_iso: str | None) -> bool:
+    """True if published_at is within PUBLISHED_AFTER_DAYS (or no cutoff set)."""
+    if not published_at_iso or config.PUBLISHED_AFTER_DAYS <= 0:
+        return True
+    try:
+        pub_date = datetime.strptime(published_at_iso[:10], "%Y-%m-%d").date()
+        cutoff = (datetime.now() - timedelta(days=config.PUBLISHED_AFTER_DAYS)).date()
+        return pub_date >= cutoff
+    except (ValueError, TypeError):
+        return True
+
+
+def _iso_date_to_unix_timestamp(iso_date: str) -> int:
+    """Convert YYYY-MM-DD to Unix timestamp (start of day UTC)."""
+    try:
+        dt = datetime.strptime(iso_date[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except (ValueError, TypeError):
+        return 0
+
+
+def fetch_and_create_sources(
+    storage: StorageBackend,
+    last_fetch_at: str | None = None,
+) -> int:
     """
-    Fetch unread Miniflux entries, create source records for each (no duplicate check in MVP).
+    Fetch unread Miniflux entries (GET only; no writes to Miniflux) published after last_fetch_at,
+    in chronological order (published_at asc), and create source records.
+    If last_fetch_at is None (first run), only fetches entries from the last FIRST_RUN_PUBLISHED_AFTER_DAYS
+    to avoid pulling years of old unread (e.g. 2018). If PUBLISHED_AFTER_DAYS > 0, still skips older entries.
     Returns the number of sources created.
     """
     base_url = (config.MINIFLUX_URL or "").rstrip("/")
@@ -41,12 +70,26 @@ def fetch_and_create_sources(storage: StorageBackend) -> int:
 
     headers = {"X-Auth-Token": api_key}
     created = 0
+    params: dict = {
+        "status": "unread",
+        "order": "published_at",
+        "direction": "asc",
+    }
+    if last_fetch_at and last_fetch_at.strip():
+        ts = _iso_date_to_unix_timestamp(last_fetch_at.strip())
+        if ts > 0:
+            params["published_after"] = ts
+    else:
+        # 首次 run：只拉最近 N 天，避免拉 2018 等陈年未读
+        if config.FIRST_RUN_PUBLISHED_AFTER_DAYS > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=config.FIRST_RUN_PUBLISHED_AFTER_DAYS)
+            params["published_after"] = int(cutoff.timestamp())
 
     with httpx.Client(timeout=30.0) as client:
-        # Get unread entry ids
+        # Get unread entry ids (read-only; we do not mark as read), 按发布时间正序
         r = client.get(
             f"{base_url}/v1/entries",
-            params={"status": "unread"},
+            params=params,
             headers=headers,
         )
         r.raise_for_status()
@@ -54,7 +97,7 @@ def fetch_and_create_sources(storage: StorageBackend) -> int:
         entry_ids = [e["id"] for e in payload.get("entries", []) if isinstance(e.get("id"), int)]
 
         for entry_id in entry_ids:
-            # Get full entry details
+            # Get full entry details (read-only)
             r2 = client.get(f"{base_url}/v1/entries/{entry_id}", headers=headers)
             r2.raise_for_status()
             entry = r2.json()
@@ -63,6 +106,8 @@ def fetch_and_create_sources(storage: StorageBackend) -> int:
             content = entry.get("content") or ""
             url = (entry.get("url") or "").strip()
             published_at = _published_at_to_iso(entry.get("published_at"))
+            if not _is_after_cutoff(published_at):
+                continue  # 跳过超过 PUBLISHED_AFTER_DAYS 的旧文章，不写入 Airtable
             feed = entry.get("feed") or {}
             author = (feed.get("title") or "").strip()
 

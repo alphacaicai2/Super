@@ -33,4 +33,5 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          PUBLISHED_AFTER_DAYS: ${{ secrets.PUBLISHED_AFTER_DAYS }}
         run: python run_pipeline.py

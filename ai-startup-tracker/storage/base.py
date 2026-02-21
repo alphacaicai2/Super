@@ -55,3 +55,12 @@ class StorageBackend(ABC):
     def create_extraction_log(self, data: dict) -> str:
         """Create an extraction log record. Returns the new record id."""
         ...
+
+    # --- Pipeline state (last fetch time for incremental Miniflux pull) ---
+    def get_last_fetch_at(self) -> str | None:
+        """Return last fetch timestamp as ISO date string (YYYY-MM-DD), or None if never run."""
+        return None
+
+    def set_last_fetch_at(self, iso_date: str) -> None:
+        """Persist last fetch date (YYYY-MM-DD or full ISO)."""
+        pass

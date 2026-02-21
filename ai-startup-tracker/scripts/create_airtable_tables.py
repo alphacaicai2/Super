@@ -173,6 +173,13 @@ def extraction_log_fields(sources_table_id: str) -> list[dict]:
     ]
 
 
+def pipeline_state_fields() -> list[dict]:
+    """单表单行，存上次 Miniflux 拉取日期，用于增量拉取。"""
+    return [
+        {"name": "last_fetch_at", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
+    ]
+
+
 def main() -> None:
     if not AIRTABLE_API_KEY or not AIRTABLE_BASE_ID:
         print("请设置环境变量 AIRTABLE_API_KEY（Personal Access Token，需勾选 schema.bases:write）和 AIRTABLE_BASE_ID")
@@ -239,6 +246,13 @@ def main() -> None:
         print("Created table: ExtractionLog")
     else:
         print("Table already exists: ExtractionLog")
+
+    # 6. PipelineState（单行，存 last_fetch_at，用于增量拉取）
+    if "PipelineState" not in existing:
+        create_table(AIRTABLE_BASE_ID, "PipelineState", pipeline_state_fields())
+        print("Created table: PipelineState")
+    else:
+        print("Table already exists: PipelineState")
 
     print("Done. Base 中表名与 config.py 中 TABLE_* 一致即可被 Pipeline 使用。")
 
