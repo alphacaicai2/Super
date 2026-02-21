@@ -8,8 +8,8 @@ from storage.base import StorageBackend
 
 
 def has_funding_signal(title: str, text: str) -> bool:
-    """Return True if (title + first 500 chars of text) contains any config.FUNDING_KEYWORDS."""
-    combined = (title or "") + " " + (text or "")[:500]
+    """Return True if (title + first 2000 chars of text) contains any config.FUNDING_KEYWORDS."""
+    combined = (title or "") + " " + (text or "")[:2000]
     return any(kw in combined for kw in config.FUNDING_KEYWORDS)
 
 

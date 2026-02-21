@@ -29,6 +29,7 @@ def main() -> None:
     stats = {
         "sources_created": 0,
         "sources_processed": 0,
+        "skipped_no_signal": 0,
         "rounds_extracted": 0,
         "needs_review_count": 0,
         "input_tokens": 0,
@@ -83,6 +84,7 @@ def main() -> None:
         processed = preprocess_source(source, storage)
         if processed is None:
             stats["sources_processed"] = stats.get("sources_processed", 0) + 1
+            stats["skipped_no_signal"] = stats.get("skipped_no_signal", 0) + 1
             continue
         stats["sources_processed"] = stats.get("sources_processed", 0) + 1
 
