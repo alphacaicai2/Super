@@ -1,0 +1,36 @@
+name: Extract pipeline
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd ai-startup-tracker
+          pip install -r requirements.txt
+
+      - name: Run pipeline
+        working-directory: ai-startup-tracker
+        env:
+          AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
+          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+          MINIFLUX_URL: ${{ secrets.MINIFLUX_URL }}
+          MINIFLUX_API_KEY: ${{ secrets.MINIFLUX_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+        run: python run_pipeline.py

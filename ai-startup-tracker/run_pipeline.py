@@ -1,6 +1,6 @@
 """
 Phase 1 主入口：Miniflux 拉取 → 预处理 → LLM 抽取 → 归一化 → 写入 Airtable。
-运行前请：cp .env.example .env 并填写 AIRTABLE_* / MINIFLUX_* / ANTHROPIC_API_KEY。
+Phase 2：结束时发送 Telegram 运行摘要（若已配置 TELEGRAM_*）。
 """
 from datetime import datetime
 
@@ -11,7 +11,8 @@ load_dotenv()
 import config
 from pipeline import fetch_and_create_sources, preprocess_source
 from pipeline.extract import extract_funding
-from pipeline.write_airtable import write_extraction_result
+from pipeline.notify import send_run_summary, send_telegram
+from pipeline.write_airtable import write_extraction_result, should_review
 from storage import AirtableBackend, StorageBackend
 
 
@@ -23,10 +24,19 @@ def get_storage() -> StorageBackend:
 
 def main() -> None:
     storage = get_storage()
+    stats = {
+        "sources_created": 0,
+        "sources_processed": 0,
+        "rounds_extracted": 0,
+        "needs_review_count": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+    }
 
     # 1) 从 Miniflux 拉取新文章并写入 Sources（status=new）
     try:
         n_created = fetch_and_create_sources(storage)
+        stats["sources_created"] = n_created
         print(f"[OK] Miniflux: {n_created} new source(s) created.")
     except Exception as e:
         print(f"[WARN] Miniflux fetch failed: {e}")
@@ -35,6 +45,7 @@ def main() -> None:
     pending = storage.get_pending_sources(limit=50)
     if not pending:
         print("[OK] No pending sources. Done.")
+        send_run_summary(stats, success=True)
         return
 
     print(f"[OK] Processing {len(pending)} pending source(s).")
@@ -52,7 +63,9 @@ def main() -> None:
         # 3) 预处理：清洗 + 融资关键词过滤；无信号则标 skipped
         processed = preprocess_source(source, storage)
         if processed is None:
+            stats["sources_processed"] = stats.get("sources_processed", 0) + 1
             continue
+        stats["sources_processed"] = stats.get("sources_processed", 0) + 1
 
         # 4) LLM 抽取
         try:
@@ -88,6 +101,8 @@ def main() -> None:
                 "status": config.LOG_STATUS_NO_FUNDING,
                 "rounds_extracted": 0,
             })
+            stats["input_tokens"] = stats.get("input_tokens", 0) + token_usage.get("input_tokens", 0)
+            stats["output_tokens"] = stats.get("output_tokens", 0) + token_usage.get("output_tokens", 0)
             continue
 
         # 5) 写入 FundingRounds + 更新 Source 状态 + ExtractionLog
@@ -99,6 +114,12 @@ def main() -> None:
                 result=result,
                 token_usage=token_usage,
             )
+            stats["rounds_extracted"] = stats.get("rounds_extracted", 0) + len(result.funding_rounds)
+            stats["input_tokens"] = stats.get("input_tokens", 0) + token_usage.get("input_tokens", 0)
+            stats["output_tokens"] = stats.get("output_tokens", 0) + token_usage.get("output_tokens", 0)
+            for r in result.funding_rounds:
+                if should_review(r):
+                    stats["needs_review_count"] = stats.get("needs_review_count", 0) + 1
             print(f"[OK] Source {source_id}: {len(result.funding_rounds)} round(s) written.")
         except Exception as e:
             print(f"[ERR] Write failed for source {source_id}: {e}")
@@ -115,7 +136,12 @@ def main() -> None:
             })
 
     print("[OK] Pipeline run finished.")
+    send_run_summary(stats, success=True)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        send_telegram(f"❌ 融资抽取失败 ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n{str(e)[:500]}")
+        raise

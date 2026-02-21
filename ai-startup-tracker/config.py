@@ -74,9 +74,8 @@ FUNDING_KEYWORDS = [
 MINIFLUX_URL = _env("MINIFLUX_URL")
 MINIFLUX_API_KEY = _env("MINIFLUX_API_KEY")
 
-# --- LLM ---
-ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
-# 默认模型，可通过环境变量覆盖
+# --- LLM（运行时用：从文章正文抽取融资事件，非开发时用）---
+# litellm 按 model 前缀选 API Key：anthropic/ → ANTHROPIC_API_KEY，openai/ → OPENAI_API_KEY 等
 LLM_MODEL = _env("LLM_MODEL") or "anthropic/claude-sonnet-4-20250514"
 
 # --- 通知（Phase 2）---
