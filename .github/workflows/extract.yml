@@ -34,4 +34,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LLM_MODEL: ${{ secrets.LLM_MODEL }}
           PUBLISHED_AFTER_DAYS: ${{ secrets.PUBLISHED_AFTER_DAYS }}
+          FUNDING_PREFILTER: ${{ secrets.FUNDING_PREFILTER }}
+          BODY_CLASSIFY: ${{ secrets.BODY_CLASSIFY }}
         run: python run_pipeline.py

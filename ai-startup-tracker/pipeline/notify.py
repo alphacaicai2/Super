@@ -39,8 +39,8 @@ def send_run_summary(
 ) -> None:
     """
     发送一次运行摘要到 Telegram（中文）。
-    stats 可含: sources_created, sources_processed, skipped_no_signal, rounds_extracted,
-    needs_review_count, input_tokens, output_tokens；缺失则按 0 处理。
+    stats 可含: sources_created, sources_processed, skipped_no_signal, skipped_body_no,
+    rounds_extracted, needs_review_count, input_tokens, output_tokens；缺失则按 0 处理。
     若未配置 TELEGRAM_* 则不发送。
     """
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
@@ -49,6 +49,7 @@ def send_run_summary(
     created = stats.get("sources_created", 0)
     processed = stats.get("sources_processed", 0)
     skipped = stats.get("skipped_no_signal", 0)
+    skipped_body = stats.get("skipped_body_no", 0)
     rounds = stats.get("rounds_extracted", 0)
     needs_review = stats.get("needs_review_count", 0)
     inp = stats.get("input_tokens", 0)
@@ -59,7 +60,7 @@ def send_run_summary(
     else:
         lines = [f"❌ 融资抽取失败 ({ts})"]
     lines.append(f"📥 新采集: {created} 篇")
-    lines.append(f"🔍 处理: {processed} 篇（关键词未命中跳过: {skipped}）")
+    lines.append(f"🔍 处理: {processed} 篇（召回跳过: {skipped} | 正文精判跳过: {skipped_body}）")
     lines.append(f"📊 新增轮次: {rounds} 条")
     lines.append(f"⚠️ 待复核: {needs_review} 条")
     if inp or out:

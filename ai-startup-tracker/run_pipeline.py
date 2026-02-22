@@ -1,6 +1,10 @@
 """
-Phase 1 主入口：Miniflux 拉取（仅上次拉取之后的新未读、按时间顺序）→ 预处理 → LLM 抽取 → 归一化 → 写入 Airtable。
-Phase 2：结束时发送 Telegram 运行摘要；若距上次拉取超过 7 天则 Telegram 提醒。
+分层流水线：召回（标题粗筛）→ 正文精判 → 结构化抽取 → 人工复核。
+
+- 召回：preprocess 用关键词/minimal/none 粗筛，尽量别漏。
+- 正文精判：LLM 二分类「正文是否含可抽取的投融资/产品发布事实」，过滤标题党与无关文。
+- 结构化抽取：仅对精判为 YES 的做 LLM 抽取并写 Airtable。
+- 人工复核：needs_review 的条目在 Airtable 待复核视图处理。
 """
 from datetime import datetime, timezone
 
@@ -10,6 +14,7 @@ load_dotenv()
 
 import config
 from pipeline import fetch_and_create_sources, preprocess_source
+from pipeline.classify import body_worth_extracting
 from pipeline.extract import extract_funding
 from pipeline.notify import send_run_summary, send_telegram
 from pipeline.write_airtable import write_extraction_result, should_review
@@ -30,6 +35,7 @@ def main() -> None:
         "sources_created": 0,
         "sources_processed": 0,
         "skipped_no_signal": 0,
+        "skipped_body_no": 0,
         "rounds_extracted": 0,
         "needs_review_count": 0,
         "input_tokens": 0,
@@ -80,7 +86,7 @@ def main() -> None:
             published_at = published_at.isoformat()[:10]
         source_channel = source.get("source_channel", config.SOURCE_CHANNEL_MINIFLUX)
 
-        # 4) 预处理：清洗 + 融资关键词过滤；无信号则标 skipped
+        # 4) 召回：预处理 + 标题粗筛（关键词/minimal/none）
         processed = preprocess_source(source, storage)
         if processed is None:
             stats["sources_processed"] = stats.get("sources_processed", 0) + 1
@@ -88,7 +94,20 @@ def main() -> None:
             continue
         stats["sources_processed"] = stats.get("sources_processed", 0) + 1
 
-        # 5) LLM 抽取
+        # 5) 正文精判：LLM 判正文是否含可抽取事实，不含则跳过抽取
+        if config.BODY_CLASSIFY:
+            try:
+                worth, classify_usage = body_worth_extracting(title, processed.text)
+                stats["input_tokens"] = stats.get("input_tokens", 0) + classify_usage.get("input_tokens", 0)
+                stats["output_tokens"] = stats.get("output_tokens", 0) + classify_usage.get("output_tokens", 0)
+                if not worth:
+                    storage.update_source_status(source_id, config.PROCESSING_STATUS_SKIPPED)
+                    stats["skipped_body_no"] = stats.get("skipped_body_no", 0) + 1
+                    continue
+            except Exception as e:
+                print(f"[WARN] Body classify failed for {source_id}: {e}, proceeding to extract.")
+
+        # 6) 结构化抽取
         try:
             result, token_usage = extract_funding(
                 processed.text,
@@ -101,7 +120,6 @@ def main() -> None:
             storage.update_source_status(source_id, config.PROCESSING_STATUS_NEEDS_REVIEW)
             storage.create_extraction_log({
                 "source": [source_id],
-                "run_at": datetime.now().strftime("%Y-%m-%d"),
                 "model": config.LLM_MODEL,
                 "input_tokens": 0,
                 "output_tokens": 0,
@@ -115,7 +133,6 @@ def main() -> None:
             storage.update_source_status(source_id, config.PROCESSING_STATUS_EXTRACTED)
             storage.create_extraction_log({
                 "source": [source_id],
-                "run_at": datetime.now().strftime("%Y-%m-%d"),
                 "model": config.LLM_MODEL,
                 "input_tokens": token_usage.get("input_tokens", 0),
                 "output_tokens": token_usage.get("output_tokens", 0),
@@ -126,7 +143,7 @@ def main() -> None:
             stats["output_tokens"] = stats.get("output_tokens", 0) + token_usage.get("output_tokens", 0)
             continue
 
-        # 6) 写入 FundingRounds + 更新 Source 状态 + ExtractionLog
+        # 7) 写入 FundingRounds + 更新 Source 状态 + ExtractionLog
         try:
             write_extraction_result(
                 storage,
@@ -147,7 +164,6 @@ def main() -> None:
             storage.update_source_status(source_id, config.PROCESSING_STATUS_NEEDS_REVIEW)
             storage.create_extraction_log({
                 "source": [source_id],
-                "run_at": datetime.now().strftime("%Y-%m-%d"),
                 "model": config.LLM_MODEL,
                 "input_tokens": token_usage.get("input_tokens", 0),
                 "output_tokens": token_usage.get("output_tokens", 0),
